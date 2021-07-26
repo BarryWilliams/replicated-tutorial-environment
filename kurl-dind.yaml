@@ -37,6 +37,10 @@ data:
       $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt install -y docker-ce-cli
+
+    # Install app with kURL
+
+    # curl -sSL https://k8s.kurl.sh/jenkins-raccoon-unstable | bash
 ---
 apiVersion: v1
 kind: Pod
