@@ -9,6 +9,13 @@ data:
     # Install dependencies for kURL which are missing in the base Ubuntu container
 
     apt-get update
+
+    # get scripts for systemctl emulation
+    apt-get install -y git
+    git clone https://github.com/gdraheim/docker-systemctl-replacement.git
+    cp docker-systemctl-replacement/files/docker/systemctl3.py /usr/local/bin/systemctl
+
+    # install other dependencies
     apt install -y \
         net-tools \
         curl \
@@ -53,6 +60,9 @@ spec:
         subPath: init.sh
     - name: dind-daemon
       image: docker:dind
+      env:
+      - name: DOCKER_TLS_CERTDIR
+        value: ""
       resources:
           requests:
               cpu: 20m
