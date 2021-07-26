@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kurl-helper-scripts
+data:
+  init.sh: |
+    #/bin/sh -ex
+
+    # Install dependencies for kURL which are missing in the base Ubuntu container
+
+    apt-get update
+    apt install -y \
+        net-tools \
+        curl \
+        iproute2 \
+        systemd \
+        iptables \
+        libnetfilter-conntrack3:amd64 \
+        kmod \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        gnupg \
+        lsb-release
+
+    # Install just the docker CLI as described here: https://docs.docker.com/engine/install/ubuntu/
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo \
+      "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+      $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update
+    apt install -y docker-ce-cli
+---
+apiVersion: v1
+kind: Pod
+metadata:
+    name: ubuntu-kurl
+spec:
+    containers:
+    - name: kurl
+      args:
+      - -c
+      - /root/init.sh; sleep 999999
+      command:
+      - /bin/sh
+      image: ubuntu:18.04
+      env:
+      - name: DOCKER_HOST
+        value: tcp://localhost:2375
+      volumeMounts:
+      - name: helper
+        mountPath: /root/init.sh
+        subPath: init.sh
+    - name: dind-daemon
+      image: docker:dind
+      resources:
+          requests:
+              cpu: 20m
+              memory: 512Mi
+      securityContext:
+          privileged: true
+      volumeMounts:
+        - name: docker-graph-storage
+          mountPath: /var/lib/docker
+    volumes:
+      - name: docker-graph-storage
+        emptyDir: {}
+      - name: helper
+        configMap:
+          name: kurl-helper-scripts
+          defaultMode: 0700
