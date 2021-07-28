@@ -3,6 +3,33 @@ kind: ConfigMap
 metadata:
   name: kurl-helper-scripts
 data:
+  systemctl: |
+    #!/bin/sh -x
+
+    # override systemctl when using the restart command
+
+    command=$1
+
+    if [ "${command}-" == "restart-" ]; then
+
+      # do stuff if restarting kubelet
+      if [ "$2" == "kubelet" ]; then
+        echo "restart kubelet"
+        pkill -f kubelet
+
+        source /var/lib/kubelet/kubeadm-flags.env
+        KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf
+        KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml
+
+        # TODO - log files
+        /usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS </dev/null &>/dev/null &
+      fi
+      exit 0
+    fi
+
+    # non-restart commands
+    /usr/local/bin/systemctl_docker_replacement $@
+
   init.sh: |
     #/bin/sh -ex
 
@@ -13,7 +40,7 @@ data:
     # get scripts for systemctl emulation
     apt-get install -y git
     git clone https://github.com/gdraheim/docker-systemctl-replacement.git
-    cp docker-systemctl-replacement/files/docker/systemctl3.py /usr/local/bin/systemctl
+    cp docker-systemctl-replacement/files/docker/systemctl3.py /usr/local/bin/systemctl_docker_replacement
 
     # install other dependencies
     apt install -y \
@@ -37,10 +64,6 @@ data:
       $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt install -y docker-ce-cli
-
-    # Install app with kURL
-
-    # curl -sSL https://k8s.kurl.sh/jenkins-raccoon-unstable | bash
 ---
 apiVersion: v1
 kind: Pod
@@ -62,6 +85,9 @@ spec:
       - name: helper
         mountPath: /root/init.sh
         subPath: init.sh
+      - name: systemctl
+        mountPath: /usr/local/bin/systemctl
+        subPath: systemctl
     - name: dind-daemon
       image: docker:dind
       env:
@@ -80,6 +106,10 @@ spec:
       - name: docker-graph-storage
         emptyDir: {}
       - name: helper
+        configMap:
+          name: kurl-helper-scripts
+          defaultMode: 0700
+      - name: systemctl
         configMap:
           name: kurl-helper-scripts
           defaultMode: 0700
